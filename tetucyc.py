@@ -1,4 +1,5 @@
 import numpy as np
+import argparse
 import itertools
 import sys, time
 import matplotlib.pyplot as mp
@@ -29,20 +30,25 @@ class Experiment(object):
     # Optional:
     #   classifier - classifier chosen for experimentation
     #
-    def __init__(self, fp, classifier = RandomForestClassifier, tune = False, search_area = None, tune_loc= None):
+    def __init__(self, fp, classifier = RandomForestClassifier, tune = False, batch = False, search_area = None, tune_loc= None):
         self.matrices = {}
         self.cl = classifier
         print(self.cl)
         results = []
+        #Run the appropriate tuning
         if tune and tune_loc:
-            #self.load_data(tune_loc)
-            #self.params = self.exhaustive_param_tune(search_area)
-            self.params = self.batch_tune(search_area, tune_loc)
+            if batch:
+                self.params = self.batch_tune(search_area, tune_loc)
+            else:
+                self.load_data(tune_loc)
+                self.params = self.exhaustive_param_tune(search_area)
         else:
             self.params = None
         self.load_data(fp)
         for each in self.data:
-            results.append(self.test_fold(each, self.labels) if self.params is None else self.test_fold(each, self.labels, self.params[-1][-1], nandetector=True))
+            #This is the worst python ever written
+            results.append(self.test_fold(each, self.labels) if self.params is 
+                    None else self.test_fold(each, self.labels, self.params[-1][-1], nandetector=True))
             self.matrices[each] = confusion_matrix([np.argmax(j)for j in results[-1][-1]], results[-1][0])
         roc_preds , roc_probs =  [], []
         for each in results:
@@ -59,7 +65,7 @@ class Experiment(object):
             if 'nan' in z:
                 pass
                 #print(z + str(y))
-        #11quit()
+        #quit()
         roc_rates = []
         for k in range(roc_preds.shape[1]):
             for i in roc_probs[:,k]:
@@ -88,6 +94,7 @@ class Experiment(object):
         for each in [i for i in os.listdir(fp)]:
             print('reading ' + each)
             self.data[each] = np.genfromtxt(os.path.join(fp,each))
+            st = st if st is not '' else each
             st = st if st is not '' else each
             st = ''.join([st[i] if st[i] == each[i] else '/' for i in range(len(st))])
         else:
@@ -233,8 +240,30 @@ class Experiment(object):
         param_hist[location] = sorted(param_hist[location], key=lambda x : float(x[0]))[-1*hist_size:]
         return param_hist[location]
 
-        
 
+    # This is the test method that should accompany batch_tuning
+    def batch_test(self, parameters, location):
+        for k in data_sets:
+            self.data = data_sets[k]
+            a = 0
+            r = 0
+            for each in self.data:
+                a += self.test_fold(each, self.labels, clargs=param_dict)[1]
+                r += 1
+            t_a += a
+            t_r += r
+            a = a / float(r)
+            if k not in param_hist:
+                param_hist[k] =  []
+            param_hist[k].append([a, param_dict])
+            print('accuracy : ' + str(a))
+            print(param_dict)
+        t_a = t_a / t_r
+        if location not in param_hist:
+            param_hist[location] = []
+        param_hist[location].append([t_a, param_dict])
+        print('$!$@$!%@#$%#%!@#$!^#!#$@! TIME TAKEN : ' + str(time.time()-start))):
+    
 
 
 
@@ -279,10 +308,41 @@ class Experiment(object):
 # Standard boiler plate, to run some experiments, based on parameters passed from the command line
 if __name__ == '__main__':
     #Parsing arguments
+    arg_parser = argparse.ArgumentParser()
+    arg_parser.add_argument('-t', help='Tuning set, used for tuning simple datasets')
+    arg_parser.add_argument('-', help='Batch tuning set, used for BIDAL tiered testing schemes
+                                        Will later turn into more sensible directory traversal,
+                                        this current scheme is bad
+                                        --top_directory
+                                        ----child_directory1
+                                        -------testfile1.txt 
+                                        -------testfile1.txt 
+                                        -------testfile1.txt 
+                                        -------testfile1.txt 
+                                        -------testfile1.txt 
+                                        -------testfile1.txt 
+                                        ----child_directory2
+                                        -------testfile1.txt 
+                                        -------testfile1.txt 
+                                        -------testfile1.txt 
+                                        -------testfile1.txt 
+                                        -------testfile1.txt 
+                                        -------testfile1.txt 
+                                        ...
+                                        ')
+    arg_parser.add_argument('-c', help='Classifier type')
+
+
+    # These are defaults that are set for particular classifiers, in case they need some particular option
+    # toggled every time they are to be run. For example, SVC will break the ROC analysis, if it 
+    # probability predictions are not forced, since ROC needs probabilities. It probably actually
+    # doesn't, but hey, for consistency's sake, and for the sake of making our computations much longer
     defaults = {
             'SVC': {'probability':True},
             }
-    #Arguments giving search area
+    # Search area configuration
+    # This should be improved at some point, and you should write more code you lazy sack of shit
+
     args  = { 
             'rf-params' : {'n_estimators': [i for i in range(1000)], 'criterion':['gini', 'entropy']},
             'en-params' : {'loss' : ['log'], 'penalty' : ['elasticnet'], 'l1_ratio': [i for i in range(1)]},
@@ -302,7 +362,7 @@ if __name__ == '__main__':
             #   
             # 
             'svc-params' : {'C' : [.1,.2,.3,.4,.5,.6,.7,.9], 'gamma' : [.001,.01,.1,1,10,100], 'probability' : [True]},
-            'svc1-params' : {'C' : [.1], 'gamma' : [100], 'probability' : [True]},
+            'svc1-params' : {'C' : [.5], 'gamma' : [10], 'probability' : [True]},
             'svc-blank-params' : { 'C' : [], 
                              'kernel' : [], 
                              'degree' : [], 
@@ -315,11 +375,5 @@ if __name__ == '__main__':
             'SVC' : SVC,
             'EN' : SGDClassifier,
             'GNB' : GaussianNB,
-            'RF' : RandomForestClassifier}
-
-
-    #Running the experiments
-    for i in sys.argv[1:]:
-    #def __init__(self, fp, classifier = RandomForestClassifier, tune = False, search_area = None, tune_loc= None):
-        a = Experiment(i, classifier=classifiers['SVC'], tune=True, search_area=args['svc1-params'], tune_loc='tune/')
+        a = Experiment(i, classifier=classifiers['SVC'], batch=tune=True, search_area=args['svc1-params'], tune_loc='tune/')
 
