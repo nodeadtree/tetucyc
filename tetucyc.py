@@ -262,7 +262,7 @@ class Experiment(object):
         if location not in param_hist:
             param_hist[location] = []
         param_hist[location].append([t_a, param_dict])
-        print('$!$@$!%@#$%#%!@#$!^#!#$@! TIME TAKEN : ' + str(time.time()-start))):
+        print('$!$@$!%@#$%#%!@#$!^#!#$@! TIME TAKEN : ' + str(time.time()-start))
     
 
 
@@ -308,42 +308,38 @@ class Experiment(object):
 # Standard boiler plate, to run some experiments, based on parameters passed from the command line
 if __name__ == '__main__':
     #Parsing arguments
-    arg_parser = argparse.ArgumentParser()
+    arg_parser = argparse.ArgumentParser(formatter_class= argparse.RawTextHelpFormatter)
     arg_parser.add_argument('-t', help='Tuning set, used for tuning simple datasets')
-    arg_parser.add_argument('-', help='Batch tuning set, used for BIDAL tiered testing schemes
-                                        Will later turn into more sensible directory traversal,
-                                        this current scheme is bad
-                                        --top_directory
-                                        ----child_directory1
-                                        -------testfile1.txt 
-                                        -------testfile1.txt 
-                                        -------testfile1.txt 
-                                        -------testfile1.txt 
-                                        -------testfile1.txt 
-                                        -------testfile1.txt 
-                                        ----child_directory2
-                                        -------testfile1.txt 
-                                        -------testfile1.txt 
-                                        -------testfile1.txt 
-                                        -------testfile1.txt 
-                                        -------testfile1.txt 
-                                        -------testfile1.txt 
-                                        ...
-                                        ')
-    arg_parser.add_argument('-c', help='Classifier type')
+    arg_parser.add_argument('-B', help="Whether to use batch tuning or not\n"
+                                        "Will later turn into more sensible directory traversal\n"
+                                        "this current scheme is bad\n"
+                                        "--top_directory\n"
+                                        "----child_directory1\n"
+                                        "-------testfile1.txt \n"
+                                        "-------testfile1.txt \n"
+                                        "-------testfile1.txt \n"
+                                        "-------testfile1.txt \n"
+                                        "-------testfile1.txt \n"
+                                        "-------testfile1.txt \n"
+                                        "----child_directory2\n"
+                                        "-------testfile1.txt \n"
+                                        "-------testfile1.txt \n"
+                                        "-------testfile1.txt \n"
+                                        "-------testfile1.txt \n"
+                                        "-------testfile1.txt \n"
+                                        "-------testfile1.txt \n"
+                                        "...\n")
 
+    arg_parser.add_argument('-c', help='Classifier type', default="GNB")
+    arg_parser.add_argument('-p', help='parameter search area key, set in end of file')
+    arg_parser.add_argument('-f', help='testing directory')
+    a = arg_parser.parse_args()
 
-    # These are defaults that are set for particular classifiers, in case they need some particular option
-    # toggled every time they are to be run. For example, SVC will break the ROC analysis, if it 
-    # probability predictions are not forced, since ROC needs probabilities. It probably actually
-    # doesn't, but hey, for consistency's sake, and for the sake of making our computations much longer
-    defaults = {
-            'SVC': {'probability':True},
-            }
     # Search area configuration
     # This should be improved at some point, and you should write more code you lazy sack of shit
 
     args  = { 
+            None : None,
             'rf-params' : {'n_estimators': [i for i in range(1000)], 'criterion':['gini', 'entropy']},
             'en-params' : {'loss' : ['log'], 'penalty' : ['elasticnet'], 'l1_ratio': [i for i in range(1)]},
             # Cutting down on search space for these svc. By design, the Experiment object will produce
@@ -369,11 +365,10 @@ if __name__ == '__main__':
                              'gamma' : [], 
                              'coef0' : [], 
                              'probability' : [True], 
-                             'decision_function_shape' : ['ovr']},
-            '-c' : 'RF' }
+                             'decision_function_shape' : ['ovr']}}
     classifiers = { 
             'SVC' : SVC,
             'EN' : SGDClassifier,
-            'GNB' : GaussianNB,
-        a = Experiment(i, classifier=classifiers['SVC'], batch=tune=True, search_area=args['svc1-params'], tune_loc='tune/')
+            'GNB' : GaussianNB}
+    a = Experiment(a.f, classifier=classifiers[a.c], batch=a.B, search_area=args[a.p], tune_loc=a.t)
 
