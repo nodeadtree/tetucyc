@@ -36,7 +36,7 @@ class Experiment(object):
         print(self.cl)
         results = []
         #Run the appropriate tuning
-        if tune and tune_loc:
+        if tune and tune_loc and search_area: 
             if batch:
                 self.params = self.batch_tune(search_area, tune_loc)
             else:
@@ -45,11 +45,14 @@ class Experiment(object):
         else:
             self.params = None
         self.load_data(fp)
-        for each in self.data:
-            #This is the worst python ever written
-            results.append(self.test_fold(each, self.labels) if self.params is 
-                    None else self.test_fold(each, self.labels, self.params[-1][-1], nandetector=True))
-            self.matrices[each] = confusion_matrix([np.argmax(j)for j in results[-1][-1]], results[-1][0])
+        if batch:
+            results = self.batch_test(parameter, location)
+        else:
+            for each in self.data:
+                #This is the worst python ever written
+                results.append(self.test_fold(each, self.labels) if self.params is 
+                        None else self.test_fold(each, self.labels, self.params[-1][-1], nandetector=True))
+                self.matrices[each] = confusion_matrix([np.argmax(j)for j in results[-1][-1]], results[-1][0])
         roc_preds , roc_probs =  [], []
         for each in results:
             for i in range(len(each[0])):
@@ -68,9 +71,6 @@ class Experiment(object):
         #quit()
         roc_rates = []
         for k in range(roc_preds.shape[1]):
-            for i in roc_probs[:,k]:
-                #print(i)
-                pass
             fpr, tpr, thresh = roc_curve(roc_preds[:,k],roc_probs[:,k])
             roc_rates.append((fpr,tpr,thresh))
         roc_auc = [auc(i[0], i[1]) for i in roc_rates]
@@ -227,7 +227,8 @@ class Experiment(object):
             if location not in param_hist:
                 param_hist[location] = []
             param_hist[location].append([t_a, param_dict])
-            print('$!$@$!%@#$%#%!@#$!^#!#$@! TIME TAKEN : ' + str(time.time()-start))
+            t = str(time.time()-start)
+            print('Tune time: ' + t)
         if store:
             cl_title = str(self.cl()).split('(')[0] + time.strftime("%d-%m-%Y%%H%M%S", time.localtime())
             with open('params_'+ cl_title +'.txt', 'w') as f:
@@ -243,29 +244,18 @@ class Experiment(object):
 
     # This is the test method that should accompany batch_tuning
     def batch_test(self, parameters, location):
+        returnable = {}
+        for k in os.listdir(location):
+                    self.load_data(location + '/'+k, mk_out=False)
+                    data_sets[k] = self.data
         for k in data_sets:
             self.data = data_sets[k]
             a = 0
             r = 0
             for each in self.data:
-                a += self.test_fold(each, self.labels, clargs=param_dict)[1]
+                returnable[each] = self.test_fold(each, self.labels, clargs=parameters)
                 r += 1
-            t_a += a
-            t_r += r
-            a = a / float(r)
-            if k not in param_hist:
-                param_hist[k] =  []
-            param_hist[k].append([a, param_dict])
-            print('accuracy : ' + str(a))
-            print(param_dict)
-        t_a = t_a / t_r
-        if location not in param_hist:
-            param_hist[location] = []
-        param_hist[location].append([t_a, param_dict])
-        print('$!$@$!%@#$%#%!@#$!^#!#$@! TIME TAKEN : ' + str(time.time()-start))
-    
-
-
+                
 
     # Prints the confusion matrices to self.expdir/self.title-conf-matrices.txt
     # This is a janky method that should be redone in a different way
@@ -336,7 +326,6 @@ if __name__ == '__main__':
     a = arg_parser.parse_args()
 
     # Search area configuration
-    # This should be improved at some point, and you should write more code you lazy sack of shit
 
     args  = { 
             None : None,
