@@ -44,10 +44,16 @@ class Experiment(object):
                 self.params = self.exhaustive_param_tune(search_area)
         else:
             self.params = None
-        self.load_data(fp)
         if batch:
-            results = self.batch_test(parameter, location)
+            if self.params is None:
+                results_raw = self.batch_test(parameters=None, location=fp)
+            else:
+                results_raw = self.batch_test(self.params[-1][-1], fp)
+            for a in results_raw:
+                results.append(results_raw[a])
+                self.matrices[a] = confusion_matrix([np.argmax(j)for j in results[-1][-1]], results[-1][0])
         else:
+            self.load_data(fp)
             for each in self.data:
                 #This is the worst python ever written
                 results.append(self.test_fold(each, self.labels) if self.params is 
@@ -245,16 +251,23 @@ class Experiment(object):
     # This is the test method that should accompany batch_tuning
     def batch_test(self, parameters, location):
         returnable = {}
+        data_sets = {}
         for k in os.listdir(location):
                     self.load_data(location + '/'+k, mk_out=False)
                     data_sets[k] = self.data
         for k in data_sets:
             self.data = data_sets[k]
-            a = 0
-            r = 0
             for each in self.data:
                 returnable[each] = self.test_fold(each, self.labels, clargs=parameters)
-                r += 1
+
+        cl_title = str(self.cl()).split('(')[0] + time.strftime("%d-%m-%Y%%H%M%S", time.localtime())
+        self.expdir = cl_title + '-results/' 
+        try:
+            os.mkdir(self.expdir)
+        except:
+            print('Failed to make output directory, assuming it exists already')
+
+        return returnable
                 
 
     # Prints the confusion matrices to self.expdir/self.title-conf-matrices.txt
@@ -318,7 +331,7 @@ if __name__ == '__main__':
                                         "-------testfile1.txt \n"
                                         "-------testfile1.txt \n"
                                         "-------testfile1.txt \n"
-                                        "...\n")
+                                        "...\n", action="store_true")
 
     arg_parser.add_argument('-c', help='Classifier type', default="GNB")
     arg_parser.add_argument('-p', help='parameter search area key, set in end of file')
@@ -356,6 +369,7 @@ if __name__ == '__main__':
                              'probability' : [True], 
                              'decision_function_shape' : ['ovr']}}
     classifiers = { 
+            'RF' : RandomForestClassifier,
             'SVC' : SVC,
             'EN' : SGDClassifier,
             'GNB' : GaussianNB}
