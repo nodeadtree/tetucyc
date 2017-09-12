@@ -19,7 +19,7 @@ import os
 #
 
 import warnings
-warnings.filterwarnings("ignore")
+arnings.filterwarnings("ignore")
 class Experiment(object):
 
     # Instantiates an experiment object, by running experiments on
@@ -51,6 +51,7 @@ class Experiment(object):
                 results_raw = self.batch_test(self.params[-1][-1], fp)
             for a in results_raw:
                 results.append(results_raw[a])
+                #print([np.argmax(j)for j in sorted(results[-1][-1], key=int)], results[-1][0])
                 self.matrices[a] = confusion_matrix([np.argmax(j)for j in results[-1][-1]], results[-1][0])
         else:
             self.load_data(fp)
@@ -58,6 +59,7 @@ class Experiment(object):
                 #This is the worst python ever written
                 results.append(self.test_fold(each, self.labels) if self.params is 
                         None else self.test_fold(each, self.labels, self.params[-1][-1], nandetector=True))
+                print(results[-1][-1])
                 self.matrices[each] = confusion_matrix([np.argmax(j)for j in results[-1][-1]], results[-1][0])
         roc_preds , roc_probs =  [], []
         for each in results:
@@ -124,9 +126,8 @@ class Experiment(object):
         cl = self.cl() if clargs is None else self.cl(**clargs)
         a = [[self.data[i][:,1:32],self.data[i][:,0]] for i in self.data if i is not fold]
         cl.fit(list(itertools.chain.from_iterable([i[0] for i in a])),\
-                list(itertools.chain.from_iterable([[str(z) for z in i[1]] for i in a])))
-        x = cl.score(self.data[fold][:,1:32], [str(z) for z in self.data[fold][:,0]])
-        #print(x)
+                list(itertools.chain.from_iterable([[int(z) for z in i[1]] for i in a])))
+        x = cl.score(self.data[fold][:,1:32], [int(z) for z in self.data[fold][:,0]])
         for k in self.data[fold]:
             a = cl.predict_proba(k[1:32])
             if True in np.isnan(a) and nandetector is True:
