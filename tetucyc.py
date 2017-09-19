@@ -7,6 +7,7 @@ import matplotlib.colors as mc
 from operator import itemgetter
 from sklearn.naive_bayes import GaussianNB
 from sklearn.linear_model import SGDClassifier
+from sklearn.lda import LDA
 from sklearn.svm import SVC
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.neighbors import KNeighborsClassifier
@@ -19,7 +20,7 @@ import os
 #
 
 import warnings
-arnings.filterwarnings("ignore")
+warnings.filterwarnings("ignore")
 class Experiment(object):
 
     # Instantiates an experiment object, by running experiments on
@@ -30,11 +31,13 @@ class Experiment(object):
     # Optional:
     #   classifier - classifier chosen for experimentation
     #
-    def __init__(self, fp, classifier = RandomForestClassifier, tune = False, batch = False, search_area = None, tune_loc= None):
+    def __init__(self, fp, classifier = RandomForestClassifier, tune = False, \
+            batch = False, search_area = None, tune_loc= None):
         self.matrices = {}
         self.cl = classifier
         print(self.cl)
         results = []
+
         #Run the appropriate tuning
         if tune and tune_loc and search_area: 
             if batch:
@@ -51,16 +54,21 @@ class Experiment(object):
                 results_raw = self.batch_test(self.params[-1][-1], fp)
             for a in results_raw:
                 results.append(results_raw[a])
-                #print([np.argmax(j)for j in sorted(results[-1][-1], key=int)], results[-1][0])
-                self.matrices[a] = confusion_matrix([np.argmax(j)for j in results[-1][-1]], results[-1][0])
+                #print([np.argmax(j)for j in sorted(results[-1][-1], key=int)],
+                #  results[-1][0])
+                self.matrices[a] = confusion_matrix([np.argmax(j)for j in \
+                    results[-1][-1]], results[-1][0])
         else:
             self.load_data(fp)
             for each in self.data:
                 #This is the worst python ever written
-                results.append(self.test_fold(each, self.labels) if self.params is 
-                        None else self.test_fold(each, self.labels, self.params[-1][-1], nandetector=True))
+                results.append(self.test_fold(each, self.labels) if \
+                        self.params is 
+                        None else self.test_fold(each, self.labels, \
+                                self.params[-2][-1], nandetector=True))
                 print(results[-1][-1])
-                self.matrices[each] = confusion_matrix([np.argmax(j)for j in results[-1][-1]], results[-1][0])
+                self.matrices[each] = confusion_matrix([np.argmax(j)\
+                        for j in results[-1][-1]], results[-1][0])
         roc_preds , roc_probs =  [], []
         for each in results:
             for i in range(len(each[0])):
@@ -89,8 +97,9 @@ class Experiment(object):
 
     # Checks a given filepath for test data, and prepares the output directory
     # Requires:
-    #   fp - the location of the test files, every file in this directory will be
-    #       treated as a separate fold, and an output directory will be made in
+    #   fp - the location of the test files, every file in this directory will
+    #       be treated as a separate fold, and an output directory will be made
+    #       in
     #       the current working directory with the name fp + '-results'
     # Optional:
     #   mk_out - whether or not to create an output directory, defaults to true
@@ -184,7 +193,7 @@ class Experiment(object):
             print('recorded z is :' + str(z))
             param_hist.append((z,  param_dict))
             param_hist = sorted(param_hist, key=lambda x : float(x[0]))[-1*hist_size:]
-        print(param_hist)
+       print(param_hist)
         return param_hist
         #Needs the accuracy from the results section
 
@@ -370,6 +379,7 @@ if __name__ == '__main__':
                              'probability' : [True], 
                              'decision_function_shape' : ['ovr']}}
     classifiers = { 
+            'LDA' : LDA,
             'RF' : RandomForestClassifier,
             'SVC' : SVC,
             'EN' : SGDClassifier,
