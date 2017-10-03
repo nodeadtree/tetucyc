@@ -4,6 +4,7 @@ import itertools
 import sys, time
 import matplotlib.pyplot as mp
 import matplotlib.colors as mc
+from math import sqrt
 from operator import itemgetter
 from sklearn.naive_bayes import GaussianNB
 from sklearn.linear_model import SGDClassifier
@@ -11,7 +12,14 @@ from sklearn.lda import LDA
 from sklearn.svm import SVC
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.neighbors import KNeighborsClassifier
-from sklearn.metrics import roc_curve, auc, confusion_matrix
+from sklearn.metrics import roc_curve
+from sklearn.metrics import confusion_matrix
+from sklearn.metrics import auc 
+from sklearn.metrics import average_precision_score
+from sklearn.metrics import f1_score
+from sklearn.metrics import recall_score
+from sklearn.metrics import accuracy_score
+from sklearn.metrics import precision_recall_fscore_support
 import os
 # This is an experiment object, that handles experimentation on RAP-BIDAL
 # data, for the sake of the RAP project, this is the more generalized version
@@ -62,15 +70,17 @@ class Experiment(object):
             self.load_data(fp)
             for each in self.data:
                 #This is the worst python ever written
+                start = time.perf_counter()
                 results.append(self.test_fold(each, self.labels) if \
                         self.params is 
                         None else self.test_fold(each, self.labels, \
                                 self.params[-2][-1], nandetector=True))
-                print(results[-1][-1])
+                self.time = time.perf_counter() - start
                 self.matrices[each] = confusion_matrix([np.argmax(j)\
                         for j in results[-1][-1]], results[-1][0])
         roc_preds , roc_probs =  [], []
         for each in results:
+            metrics_accumulated = []
             for i in range(len(each[0])):
                 roc_preds.append([1 if j is int(each[0][i]) else 0 \
                         for j in sorted([int(k) for k in \
@@ -84,7 +94,6 @@ class Experiment(object):
             if 'nan' in z:
                 pass
                 #print(z + str(y))
-        #quit()
         roc_rates = []
         for k in range(roc_preds.shape[1]):
             fpr, tpr, thresh = roc_curve(roc_preds[:,k],roc_probs[:,k])
@@ -136,6 +145,7 @@ class Experiment(object):
         a = [[self.data[i][:,1:32],self.data[i][:,0]] for i in self.data if i is not fold]
         cl.fit(list(itertools.chain.from_iterable([i[0] for i in a])),\
                 list(itertools.chain.from_iterable([[int(z) for z in i[1]] for i in a])))
+        #ENFUCKULATE
         x = cl.score(self.data[fold][:,1:32], [int(z) for z in self.data[fold][:,0]])
         for k in self.data[fold]:
             a = cl.predict_proba(k[1:32])
@@ -193,7 +203,7 @@ class Experiment(object):
             print('recorded z is :' + str(z))
             param_hist.append((z,  param_dict))
             param_hist = sorted(param_hist, key=lambda x : float(x[0]))[-1*hist_size:]
-       print(param_hist)
+        print(param_hist)
         return param_hist
         #Needs the accuracy from the results section
 
@@ -204,7 +214,7 @@ class Experiment(object):
     # 
     #   location - Location of datasets to tune on
     #
-    def batch_tune(self, parameters, location, store=False):
+    def batch_tune(self, parameters, location, store=True):
         param_names  = []
         param_values = []
         data_sets = {}
@@ -216,8 +226,8 @@ class Experiment(object):
         for k in os.listdir(location):
             self.load_data(location + '/'+k, mk_out=False)
             data_sets[k] = self.data
+        start = time.perf_counter()
         for i in param_values:
-            start = time.time()
             t_a = 0
             t_r = 0
             param_dict = {}
@@ -243,11 +253,12 @@ class Experiment(object):
             if location not in param_hist:
                 param_hist[location] = []
             param_hist[location].append([t_a, param_dict])
-            t = str(time.time()-start)
             print('Tune time: ' + t)
+        t = str(time.perf_counter()-start)
         if store:
             cl_title = str(self.cl()).split('(')[0] + time.strftime("%d-%m-%Y%%H%M%S", time.localtime())
             with open('params_'+ cl_title +'.txt', 'w') as f:
+                f.write('Tune time : ' + t + '\n' + '##############################' + '\n')
                 for a in param_hist.keys():
                     f.write(a + '\n' + '##############################')
                     param_hist[a] = sorted(param_hist[a], key=lambda x : float(x[0]))
@@ -265,12 +276,14 @@ class Experiment(object):
         for k in os.listdir(location):
                     self.load_data(location + '/'+k, mk_out=False)
                     data_sets[k] = self.data
+        start = time.perf_counter()
         for k in data_sets:
             self.data = data_sets[k]
             for each in self.data:
                 returnable[each] = self.test_fold(each, self.labels, clargs=parameters)
 
-        cl_title = str(self.cl()).split('(')[0] + time.strftime("%d-%m-%Y%%H%M%S", time.localtime())
+        self.test_time = time.perf_counter() - start
+        cl_title = str(self.cl()).split('(')[0] + time.strftime("%d-%m-%Y%H%M%S", time.localtime())
         self.expdir = cl_title + '-results/' 
         try:
             os.mkdir(self.expdir)
@@ -286,15 +299,21 @@ class Experiment(object):
     # The thing handling the printing to this should be much more robust, and capable of dealing with a
     # greater possible set of outputs, as it stands right now, it just sorta pukes out a turd.
     # Produces a number 
+    #
+    # TODO: include the following metrics:
+    #       Time
+    #       I dont know what fucking else. This is killing me.
+    #
+    #       
     def print_results(self):
         buff = []
         prebuff = []
-        acc_acc = 0
+        acc_acc = []
         for each in self.matrices:
             buff.append(each + '\n')
             acc = np.sum(np.diag(self.matrices[each]))/float(np.sum(self.matrices[each]))
             buff.append('Fold accuracy : ' + str(acc) + '\n')
-            acc_acc += acc
+            acc_acc.append(acc)
             buff.append(''.join([ '#' for k in range(40)]) + '\n')
             for i in range(len(self.labels)):
                 buff.append(','.join([str(k) for k in self.matrices[each][i,] ]) + '\n')
@@ -307,8 +326,51 @@ class Experiment(object):
                 prebuff.append('Top 5 parameter dictionaries were : ' + ' '.join([str(k) for k in self.params]) + '\n')
                 prebuff.append(''.join([ '#' for k in range(40)]) + '\n')
             prebuff.append(self.title + ' Accumulated Confusion Matrix\n')
-            prebuff.append('Average accuracy across all folds : ' + str(acc_acc / len(self.matrices)) + '\n')
             summed_matrix = sum([self.matrices[k] for k in self.matrices])
+            acc = np.sum(np.diag(summed_matrix))/float(np.sum(summed_matrix))
+            prebuff.append('Accuracy across summed folds : ' + str(acc) + '\n')
+            av_acc = sum(acc_acc)/len(acc_acc)
+            prebuff.append('Avg Cross Fold Accuracy : ' + str(av_acc) + '\n')
+            sd_acc = sqrt(sum([(i - av_acc)**2 for i in acc_acc]) / len(acc_acc))
+            prebuff.append('Cross Fold Accuracy standard deviation : ' + str(sd_acc) + '\n')
+            preds = []
+            actual = []
+            pred_sum = {}
+            for x, i in enumerate(summed_matrix):
+                for y, j in enumerate(i):
+                    preds = preds + [x for k in range(j)]
+                    actual = actual + [y for k in range(j)]
+            stats = precision_recall_fscore_support(actual, preds)
+            specificity = [] 
+            support = [] 
+            for x, i in enumerate(summed_matrix):
+                negatives = np.sum(summed_matrix) - np.sum(summed_matrix[:,x])
+                true_negatives = negatives - np.sum(i) + summed_matrix[x,x]
+                specificity.append(true_negatives / negatives)
+                support.append(np.sum(summed_matrix[:,x]))
+            else: 
+                specificity_avg = sum(specificity) / (x + 1)
+                specificity_sd = sqrt(sum([(i - specificity_avg)**2 for i in specificity]) / len(specificity))
+                support_avg = sum(support) / (x + 1)
+                support_sd = sqrt(sum([(i - support_avg)**2 for i in support]) / len(support))
+            precision_avg = sum(stats[0]) / len(stats[0])
+            precision_sd= sqrt(sum([(i - precision_avg)**2 for i in stats[0]]) / len(stats[0]))
+            recall_avg = sum(stats[1]) / len(stats[1])
+            recall_sd= sqrt(sum([(i - recall_avg)**2 for i in stats[1]]) / len(stats[1]))
+            f1_avg  = sum(stats[2]) / len(stats[2])
+            f1_sd= sqrt(sum([(i - f1_avg)**2 for i in stats[2]]) / len(stats[2]))
+            
+            prebuff.append('Test Time : ' + str(self.time) + '\n')
+            prebuff.append('Specificity (avg): ' + str(specificity_avg) + '\n')
+            prebuff.append('Specificity (sd): ' + str(specificity_sd) + '\n')
+            prebuff.append('Support (avg): ' + str(support_avg) + '\n')
+            prebuff.append('Support (sd): ' + str(support_sd) + '\n')
+            prebuff.append('Precision (avg): ' + str(precision_avg) + '\n')
+            prebuff.append('Precision (sd): ' + str(precision_sd) + '\n')
+            prebuff.append('Recall (avg): ' + str(recall_avg) + '\n')
+            prebuff.append('Recall (sd): ' + str(recall_sd) + '\n')
+            prebuff.append('F1 (avg): ' + str(f1_avg) + '\n')
+            prebuff.append('F1 (sd): ' + str(f1_sd) + '\n')
             prebuff.append(''.join([ '#' for k in range(40)]) + '\n')
             for i in range(len(self.labels)):
                 prebuff.append(','.join([str(k) for k in summed_matrix[i,] ]) + '\n')
@@ -317,6 +379,9 @@ class Experiment(object):
         with open(self.expdir+ '/' + self.title + '-conf-matrices.txt', 'w') as f:
             for each in buff:
                 f.write(each)
+
+    
+    # ,Param1,Param2,Accuracy1_total,acc1_std,Accuracy2_percentage,acc2_std,AUC,auc_std,Runtime,rt_std,Precision,prec_std,Recall,rec_std,F1-Score,f1-std,Specificity,spec-std,Support,supp-std
 
 # Standard boiler plate, to run some experiments, based on parameters passed from the command line
 if __name__ == '__main__':
@@ -329,18 +394,18 @@ if __name__ == '__main__':
                                         "--top_directory\n"
                                         "----child_directory1\n"
                                         "-------testfile1.txt \n"
-                                        "-------testfile1.txt \n"
-                                        "-------testfile1.txt \n"
-                                        "-------testfile1.txt \n"
-                                        "-------testfile1.txt \n"
-                                        "-------testfile1.txt \n"
+                                        "-------testfile2.txt \n"
+                                        "-------testfile3.txt \n"
+                                        "-------testfile4.txt \n"
+                                        "-------testfile5.txt \n"
+                                        "-------testfile6.txt \n"
                                         "----child_directory2\n"
                                         "-------testfile1.txt \n"
-                                        "-------testfile1.txt \n"
-                                        "-------testfile1.txt \n"
-                                        "-------testfile1.txt \n"
-                                        "-------testfile1.txt \n"
-                                        "-------testfile1.txt \n"
+                                        "-------testfile2.txt \n"
+                                        "-------testfile3.txt \n"
+                                        "-------testfile4.txt \n"
+                                        "-------testfile5.txt \n"
+                                        "-------testfile6.txt \n"
                                         "...\n", action="store_true")
 
     arg_parser.add_argument('-c', help='Classifier type', default="GNB")
