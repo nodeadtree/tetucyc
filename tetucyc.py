@@ -1,4 +1,6 @@
 import numpy as np
+import matplotlib
+matplotlib.use('Agg')
 import argparse
 import itertools
 import sys, time
@@ -41,6 +43,8 @@ class Experiment(object):
     #
     def __init__(self, fp, classifier = RandomForestClassifier, tune = False, \
             batch = False, search_area = None, tune_loc= None):
+        self.fp = fp
+        print(fp)
         self.matrices = {}
         self.cl = classifier
         print(self.cl)
@@ -68,6 +72,7 @@ class Experiment(object):
                     results[-1][-1]], results[-1][0])
         else:
             self.load_data(fp)
+            self.cl_title = self.fp[:-1] +  time.strftime("%d-%m-%Y-%H%M%S", time.localtime())
             for each in self.data:
                 #This is the worst python ever written
                 start = time.perf_counter()
@@ -99,7 +104,7 @@ class Experiment(object):
             fpr, tpr, thresh = roc_curve(roc_preds[:,k],roc_probs[:,k])
             roc_rates.append((fpr,tpr,thresh))
         roc_auc = [auc(i[0], i[1]) for i in roc_rates]
-
+        self.roc_avg = sum(roc_auc) /len(roc_auc)
         self.graph_it(roc_rates, roc_auc)
         self.print_results()
 
@@ -121,7 +126,8 @@ class Experiment(object):
             print('reading ' + each)
             self.data[each] = np.genfromtxt(os.path.join(fp,each))
             st = st if st is not '' else each
-            st = st if st is not '' else each
+            st = each
+            print(st)
             st = ''.join([st[i] if st[i] == each[i] else '/' for i in range(len(st))])
         else:
             for i in self.data[list(self.data.keys())[1]][:,0]:
@@ -176,7 +182,7 @@ class Experiment(object):
         mp.ylabel('True Positive Rate')
         mp.title(self.cl.__name__ + ' ROC')
         mp.legend(loc="lower right", prop={ 'size':8 })
-        a.savefig(self.expdir+ '/' + self.title + '-ROC.png')
+        a.savefig(self.expdir+ '/' + self.cl_title + '-ROC.png')
         mp.close('all')
 
     # Exhaustively tunes parameters of classifier
@@ -256,7 +262,7 @@ class Experiment(object):
             print('Tune time: ' + t)
         t = str(time.perf_counter()-start)
         if store:
-            cl_title = str(self.cl()).split('(')[0] + time.strftime("%d-%m-%Y%%H%M%S", time.localtime())
+            cl_title = self.fp[:-1] + time.strftime("%d-%m-%Y-%H%M%S", time.localtime())
             with open('params_'+ cl_title +'.txt', 'w') as f:
                 f.write('Tune time : ' + t + '\n' + '##############################' + '\n')
                 for a in param_hist.keys():
@@ -282,9 +288,9 @@ class Experiment(object):
             for each in self.data:
                 returnable[each] = self.test_fold(each, self.labels, clargs=parameters)
 
-        self.test_time = time.perf_counter() - start
-        cl_title = str(self.cl()).split('(')[0] + time.strftime("%d-%m-%Y%H%M%S", time.localtime())
-        self.expdir = cl_title + '-results/' 
+        self.time = time.perf_counter() - start
+        self.cl_title = self.fp[:-1] +  time.strftime("%d-%m-%Y-%H%M%S", time.localtime())
+        self.expdir = self.cl_title + '-results/' 
         try:
             os.mkdir(self.expdir)
         except:
@@ -319,7 +325,7 @@ class Experiment(object):
                 buff.append(','.join([str(k) for k in self.matrices[each][i,] ]) + '\n')
             buff.append(''.join([ '#' for k in range(40)]) + '\n')
         else:
-            prebuff.append(self.title + ' Confusion Matrices\n')
+            prebuff.append(self.cl_title + ' Confusion Matrices\n')
             prebuff.append('Generated on :' + time.strftime("%a, %d %b %Y %H:%M:%S \n", time.localtime()))
             prebuff.append('Using the following arguments : ' + ' '.join(sys.argv) + '\n')
             if self.params is not None:
@@ -361,6 +367,7 @@ class Experiment(object):
             f1_sd= sqrt(sum([(i - f1_avg)**2 for i in stats[2]]) / len(stats[2]))
             
             prebuff.append('Test Time : ' + str(self.time) + '\n')
+            prebuff.append('Average AUC : ' + str(self.roc_avg) + '\n')
             prebuff.append('Specificity (avg): ' + str(specificity_avg) + '\n')
             prebuff.append('Specificity (sd): ' + str(specificity_sd) + '\n')
             prebuff.append('Support (avg): ' + str(support_avg) + '\n')
@@ -376,7 +383,7 @@ class Experiment(object):
                 prebuff.append(','.join([str(k) for k in summed_matrix[i,] ]) + '\n')
             prebuff.append(''.join([ '#' for k in range(40)]) + '\n')
             buff = prebuff + buff
-        with open(self.expdir+ '/' + self.title + '-conf-matrices.txt', 'w') as f:
+        with open(self.expdir+ '/' + self.cl_title + '-conf-matrices.txt', 'w') as f:
             for each in buff:
                 f.write(each)
 
@@ -418,7 +425,7 @@ if __name__ == '__main__':
     args  = { 
             None : None,
             'rf-params' : {'n_estimators': [i for i in range(1000)], 'criterion':['gini', 'entropy']},
-            'en-params' : {'loss' : ['log'], 'penalty' : ['elasticnet'], 'l1_ratio': [i for i in range(1)]},
+            'en-params' : {'loss' : ['log'], 'penalty' : ['elasticnet'], 'l1_ratio': [i/100 for i in range(100)]},
             # Cutting down on search space for these svc. By design, the Experiment object will produce
             # every possible combination of the arguments provided on instantiation. Additionally, the
             # SVC classifier will not be affected by changing the certain arguments while other arguments
