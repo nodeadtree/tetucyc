@@ -42,13 +42,15 @@ class Experiment(object):
     #   classifier - classifier chosen for experimentation
     #
     def __init__(self, fp, classifier = RandomForestClassifier, tune = False, \
-            batch = False, search_area = None, tune_loc= None):
+            batch = False, search_area = None, tune_loc= None, labels=None):
         self.fp = fp
         print(fp)
         self.matrices = {}
         self.cl = classifier
         print(self.cl)
         results = []
+        self.tmp_labels = labels
+        self.act_labels = None
 
         #Run the appropriate tuning
         if tune and tune_loc and search_area: 
@@ -125,6 +127,28 @@ class Experiment(object):
         for each in [i for i in os.listdir(fp)]:
             print('reading ' + each)
             self.data[each] = np.genfromtxt(os.path.join(fp,each))
+            if self.tmp_labels is not None:
+                d = dict()
+                d2 = dict()
+                counter = 0
+                #janky fix for subsets of labels
+                for k in self.data[each]:
+                    if k[0] not in d2 and k[0] in self.tmp_labels:
+                        d2[k[0]] = counter
+                        d[d2[k[0]]] = []
+                        print(d2[k[0]])
+                        counter +=1
+                    if k[0] in self.tmp_labels:
+                        d[d2[k[0]]].append(k[1:])
+                else:
+                    a = []
+                    for i in d:
+                        for k in d[i]:
+                            a.append([i]+list(k))
+                    self.data[each] = np.array(a)
+                    self.act_labels = {}
+                    for k in d2:
+                        self.act_labels[d2[k]]=k
             st = st if st is not '' else each
             st = each
             print(st)
@@ -174,7 +198,11 @@ class Experiment(object):
         a = mp.figure(figsize=(20,15), dpi=200)
         colors = list(mc.cnames.keys())[:len(rates)]
         for i in range(len(rates)):
-            mp.plot(rates[i][0], rates[i][1], color=colors[i], \
+            if self.act_labels is not None:
+                mp.plot(rates[i][0], rates[i][1], color=colors[i], \
+                    lw=2, label='Gesture' + str(self.act_labels[i]) + ' , AUC = ' + str(auc[i]))
+            else:
+                mp.plot(rates[i][0], rates[i][1], color=colors[i], \
                     lw=2, label='Gesture' + str(i) + ' , AUC = ' + str(auc[i]))
         mp.xlim([0.0, 1.0])
         mp.ylim([0.0, 1.05])
@@ -379,6 +407,8 @@ class Experiment(object):
             prebuff.append('F1 (avg): ' + str(f1_avg) + '\n')
             prebuff.append('F1 (sd): ' + str(f1_sd) + '\n')
             prebuff.append(''.join([ '#' for k in range(40)]) + '\n')
+            if self.act_labels is not None:
+                prebuff.append(','.join([str(i) for i in self.act_labels]) + ' labels tested' + '\n')
             for i in range(len(self.labels)):
                 prebuff.append(','.join([str(k) for k in summed_matrix[i,] ]) + '\n')
             prebuff.append(''.join([ '#' for k in range(40)]) + '\n')
@@ -456,5 +486,5 @@ if __name__ == '__main__':
             'SVC' : SVC,
             'EN' : SGDClassifier,
             'GNB' : GaussianNB}
-    a = Experiment(a.f, classifier=classifiers[a.c], batch=a.B, search_area=args[a.p], tune_loc=a.t)
+    a = Experiment(a.f, classifier=classifiers[a.c], batch=a.B, search_area=args[a.p], tune_loc=a.t, labels=[1,5,46])
 
