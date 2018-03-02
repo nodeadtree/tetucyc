@@ -1,3 +1,4 @@
+#!/bin/python
 import numpy as np
 import matplotlib
 matplotlib.use('Agg')
@@ -7,6 +8,7 @@ import sys, time
 import matplotlib.pyplot as mp
 import matplotlib.colors as mc
 from math import sqrt
+from math import exp
 from operator import itemgetter
 from sklearn.naive_bayes import GaussianNB
 from sklearn.linear_model import SGDClassifier
@@ -42,7 +44,7 @@ class Experiment(object):
     #   classifier - classifier chosen for experimentation
     #
     def __init__(self, fp, classifier = RandomForestClassifier, tune = False, \
-            batch = False, search_area = None, tune_loc= None, labels=None):
+            batch = False, search_area = None, tune_loc= None, labels=None, cols=None):
         self.fp = fp
         print(fp)
         self.matrices = {}
@@ -51,6 +53,11 @@ class Experiment(object):
         results = []
         self.tmp_labels = labels
         self.act_labels = None
+        if cols is None:
+            self.cols = -1
+        else:
+            self.cols = cols
+
 
         #Run the appropriate tuning
         if tune and tune_loc and search_area: 
@@ -59,6 +66,7 @@ class Experiment(object):
             else:
                 self.load_data(tune_loc)
                 self.params = self.exhaustive_param_tune(search_area)
+            self.get_params = lambda : self.params[-2][-1]
         else:
             self.params = None
         if batch:
@@ -74,7 +82,8 @@ class Experiment(object):
                     results[-1][-1]], results[-1][0])
         else:
             self.load_data(fp)
-            self.cl_title = self.fp[:-1] +  time.strftime("%d-%m-%Y-%H%M%S", time.localtime())
+            self.cl_title = os.path.basename(os.path.normpath(self.fp)) +  time.strftime("%d-%m-%Y-%H%M%S", time.localtime())
+            #self.cl_title = self.fp[:-1] +  time.strftime("%d-%m-%Y-%H%M%S", time.localtime())
             for each in self.data:
                 #This is the worst python ever written
                 start = time.perf_counter()
@@ -93,18 +102,28 @@ class Experiment(object):
                         for j in sorted([int(k) for k in \
                         self.labels], key=int)])
                 roc_probs.append(each[-1][i])
-        roc_preds = np.array(roc_preds)
-        roc_probs = np.array(roc_probs)
+        for i in roc_preds:
+            if 1 in i:
+                prine("44e\
+                        4ne found for :" + str(i))
+
+        roc_preds = np.array(roc_preds[:])
+        roc_probs = np.array(roc_probs[:])
+        print(roc_probs)
         # Ugly bullshit
         for k, y in zip(roc_probs, roc_preds):
             z = ' '.join([str(i) for i in k])
-            if 'nan' in z:
+            if 'nan' or 'NaN' in z:
                 pass
                 #print(z + str(y))
+
         roc_rates = []
+
         for k in range(roc_preds.shape[1]):
-            fpr, tpr, thresh = roc_curve(roc_preds[:,k],roc_probs[:,k])
+            fpr, tpr, thresh = roc_curve(roc_preds[:,k],np.nan_to_num(roc_probs[:,k]))
+            #print(str(fpr)+"\t,\t"+str(tpr)+"\t,\t"+str(thresh))
             roc_rates.append((fpr,tpr,thresh))
+
         roc_auc = [auc(i[0], i[1]) for i in roc_rates]
         self.roc_avg = sum(roc_auc) /len(roc_auc)
         self.graph_it(roc_rates, roc_auc)
@@ -159,7 +178,9 @@ class Experiment(object):
         self.title = st.replace('/','').replace('.txt','').replace('.','')
         self.labels = classes.keys()
         if mk_out:
-            self.expdir = fp.split('/')[-2] + '-results/' if fp.endswith('/') else fp.split('/')[-1]
+            #self.expdir = self.fp[:-1] + time.strftime("%d-%m-%Y-%H%M%S", time.localtime())
+            self.expdir = fp[:-1] + time.strftime("%d-%m-%Y-%H%M%S", time.localtime())
+            #self.expdir = fp.split('/')[-2] + '-results/' if fp.endswith('/') else fp.split('/')[-1]
             try:
                 os.mkdir(self.expdir)
             except:
@@ -172,16 +193,16 @@ class Experiment(object):
     #
     def test_fold(self, fold, labels, clargs=None, nandetector=False):
         cl = self.cl() if clargs is None else self.cl(**clargs)
-        a = [[self.data[i][:,1:32],self.data[i][:,0]] for i in self.data if i is not fold]
+        a = [[self.data[i][:,1:self.cols],self.data[i][:,0]] for i in self.data if i is not fold]
         cl.fit(list(itertools.chain.from_iterable([i[0] for i in a])),\
                 list(itertools.chain.from_iterable([[int(z) for z in i[1]] for i in a])))
         #ENFUCKULATE
-        x = cl.score(self.data[fold][:,1:32], [int(z) for z in self.data[fold][:,0]])
+        x = cl.score(self.data[fold][:,1:self.cols], [int(z) for z in self.data[fold][:,0]])
         for k in self.data[fold]:
-            a = cl.predict_proba(k[1:32])
+            a = cl.predict_proba(k[1:self.cols])
             if True in np.isnan(a) and nandetector is True:
                 print(int(k[33]))
-        return [[int(z) for z in self.data[fold][:,0]], x,cl.predict_proba(self.data[fold][:,1:32])]
+        return [[int(z) for z in self.data[fold][:,0]], x,cl.predict_proba(self.data[fold][:,1:self.cols])]
 
     # Prints the ROC and AUC graphs to self.expdir/self.title-ROC.png
     # Requires:
@@ -210,6 +231,7 @@ class Experiment(object):
         mp.ylabel('True Positive Rate')
         mp.title(self.cl.__name__ + ' ROC')
         mp.legend(loc="lower right", prop={ 'size':8 })
+        print("output is at "+self.expdir+ '/' + self.cl_title + '-ROC.png')
         a.savefig(self.expdir+ '/' + self.cl_title + '-ROC.png')
         mp.close('all')
 
@@ -290,7 +312,9 @@ class Experiment(object):
             print('Tune time: ' + t)
         t = str(time.perf_counter()-start)
         if store:
-            cl_title = self.fp[:-1] + time.strftime("%d-%m-%Y-%H%M%S", time.localtime())
+            #cl_title = self.fp[:-1] + time.strftime("%d-%m-%Y-%H%M%S", time.localtime())
+            cl_title = os.path.basename(os.path.normpath(self.fp))+ time.strftime("%d-%m-%Y-%H%M%S", time.localtime())
+            print(cl_title)
             with open('params_'+ cl_title +'.txt', 'w') as f:
                 f.write('Tune time : ' + t + '\n' + '##############################' + '\n')
                 for a in param_hist.keys():
@@ -317,7 +341,8 @@ class Experiment(object):
                 returnable[each] = self.test_fold(each, self.labels, clargs=parameters)
 
         self.time = time.perf_counter() - start
-        self.cl_title = self.fp[:-1] +  time.strftime("%d-%m-%Y-%H%M%S", time.localtime())
+        #self.cl_title = self.fp[:-1] +  time.strftime("%d-%m-%Y-%H%M%S", time.localtime())
+        self.cl_title = os.path.basename(os.path.normpath(self.fp)) +  time.strftime("%d-%m-%Y-%H%M%S", time.localtime())
         self.expdir = self.cl_title + '-results/' 
         try:
             os.mkdir(self.expdir)
@@ -406,13 +431,14 @@ class Experiment(object):
             prebuff.append('Recall (sd): ' + str(recall_sd) + '\n')
             prebuff.append('F1 (avg): ' + str(f1_avg) + '\n')
             prebuff.append('F1 (sd): ' + str(f1_sd) + '\n')
-            prebuff.append(''.join([ '#' for k in range(40)]) + '\n')
             if self.act_labels is not None:
-                prebuff.append(','.join([str(i) for i in self.act_labels]) + ' labels tested' + '\n')
+                prebuff.append(','.join([str(self.act_labels[i]) for i in self.act_labels]) + ' labels tested' + '\n')
+            prebuff.append(''.join([ '#' for k in range(40)]) + '\n')
             for i in range(len(self.labels)):
                 prebuff.append(','.join([str(k) for k in summed_matrix[i,] ]) + '\n')
             prebuff.append(''.join([ '#' for k in range(40)]) + '\n')
             buff = prebuff + buff
+        print("output is at : "+self.expdir+ '/' + self.cl_title + '-conf-matrices.txt')
         with open(self.expdir+ '/' + self.cl_title + '-conf-matrices.txt', 'w') as f:
             for each in buff:
                 f.write(each)
@@ -455,7 +481,7 @@ if __name__ == '__main__':
     args  = { 
             None : None,
             'rf-params' : {'n_estimators': [i for i in range(1000)], 'criterion':['gini', 'entropy']},
-            'en-params' : {'loss' : ['log'], 'penalty' : ['elasticnet'], 'l1_ratio': [i/100 for i in range(100)]},
+            'en-params' : {'loss' : ['log'], 'penalty' : ['elasticnet'], 'l1_ratio': [.5]},
             # Cutting down on search space for these svc. By design, the Experiment object will produce
             # every possible combination of the arguments provided on instantiation. Additionally, the
             # SVC classifier will not be affected by changing the certain arguments while other arguments
@@ -471,8 +497,7 @@ if __name__ == '__main__':
             #   $cl = SVC(kernel='linear', degree=2, random_state=2)
             #   
             # 
-            'svc-params' : {'C' : [.1,.2,.3,.4,.5,.6,.7,.9], 'gamma' : [.001,.01,.1,1,10,100], 'probability' : [True]},
-            'svc1-params' : {'C' : [.5], 'gamma' : [10], 'probability' : [True]},
+            'svc-params' : {'C' : [.1,.2,.3,.4,.5,.6,.7,.9], 'gamma' : [exp(abs(50-i)) for i in range(100)], 'probability' : [True]},
             'svc-blank-params' : { 'C' : [], 
                              'kernel' : [], 
                              'degree' : [], 
@@ -486,5 +511,17 @@ if __name__ == '__main__':
             'SVC' : SVC,
             'EN' : SGDClassifier,
             'GNB' : GaussianNB}
-    a = Experiment(a.f, classifier=classifiers[a.c], batch=a.B, search_area=args[a.p], tune_loc=a.t, labels=[1,5,46])
+
+    b = Experiment(a.f, classifier=classifiers[a.c], batch=a.B, search_area=args[a.p], tune_loc=a.t)
+    #b = Experiment(a.f, classifier=classifiers[a.c], batch=a.B, search_area=args[a.p], tune_loc=a.t, labels=[34,35,36,41,42,43,45,46])
+    #b = Experiment(a.f, classifier=classifiers[a.c], batch=a.B, search_area=args[a.p], tune_loc=a.t, labels=[34,35,36,37,38,39,40,41,42,43,45,46])
+
+
+
+
+
+
+
+
+
 
