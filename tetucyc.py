@@ -25,6 +25,13 @@ from sklearn.metrics import recall_score
 from sklearn.metrics import accuracy_score
 from sklearn.metrics import precision_recall_fscore_support
 import os
+
+# Copyright (c) 2018 Juniper Overbeck
+#
+# This Source Code Form is subject to the terms of the Mozilla Public
+# License, v. 2.0. If a copy of the MPL was not distributed with this
+# file, You can obtain one at http://mozilla.org/MPL/2.0/.
+
 # This is an experiment object, that handles experimentation on RAP-BIDAL
 # data, for the sake of the RAP project, this is the more generalized version
 # than the original RAPTEST.py it is derived from, however, it can and will
@@ -102,10 +109,6 @@ class Experiment(object):
                         for j in sorted([int(k) for k in \
                         self.labels], key=int)])
                 roc_probs.append(each[-1][i])
-        for i in roc_preds:
-            if 1 in i:
-                prine("44e\
-                        4ne found for :" + str(i))
 
         roc_preds = np.array(roc_preds[:])
         roc_probs = np.array(roc_probs[:])
@@ -508,6 +511,7 @@ if __name__ == '__main__':
     classifiers = { 
             'LDA' : LDA,
             'RF' : RandomForestClassifier,
+            'KNN' : KNeighborsClassifier,
             'SVC' : SVC,
             'EN' : SGDClassifier,
             'GNB' : GaussianNB}
